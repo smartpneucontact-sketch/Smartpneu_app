@@ -3,20 +3,44 @@
 	archiveVersion = 1;
 	classes = {
 	};
-	objectVersion = 77;
+	objectVersion = 56;
 	objects = {
+
+/* Begin PBXBuildFile section */
+		A1000001 /* SmartPneuApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000001 /* SmartPneuApp.swift */; };
+		A1000002 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000002 /* ContentView.swift */; };
+		A1000003 /* CameraManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000003 /* CameraManager.swift */; };
+		A1000004 /* CameraPreviewView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000004 /* CameraPreviewView.swift */; };
+		A1000005 /* PhotoCaptureManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000005 /* PhotoCaptureManager.swift */; };
+		A1000006 /* TireSpec.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000006 /* TireSpec.swift */; };
+		A1000007 /* BackgroundRemover.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000007 /* BackgroundRemover.swift */; };
+		A1000008 /* TireOCRProcessor.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000008 /* TireOCRProcessor.swift */; };
+		A1000009 /* TireTextParser.swift in Sources */ = {isa = PBXBuildFile; fileRef = A2000009 /* TireTextParser.swift */; };
+		A100000A /* ScanHistoryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000A /* ScanHistoryView.swift */; };
+		A100000B /* ScanResultView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000B /* ScanResultView.swift */; };
+		A100000C /* StudioPhotoView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000C /* StudioPhotoView.swift */; };
+		A100000D /* TireScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A200000D /* TireScannerView.swift */; };
+		A100000E /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = A200000E /* Assets.xcassets */; };
+/* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
 		035360302F6656C300F178BE /* SmartPneu.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SmartPneu.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A2000001 /* SmartPneuApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SmartPneuApp.swift; sourceTree = "<group>"; };
+		A2000002 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		A2000003 /* CameraManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraManager.swift; sourceTree = "<group>"; };
+		A2000004 /* CameraPreviewView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CameraPreviewView.swift; sourceTree = "<group>"; };
+		A2000005 /* PhotoCaptureManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PhotoCaptureManager.swift; sourceTree = "<group>"; };
+		A2000006 /* TireSpec.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TireSpec.swift; sourceTree = "<group>"; };
+		A2000007 /* BackgroundRemover.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BackgroundRemover.swift; sourceTree = "<group>"; };
+		A2000008 /* TireOCRProcessor.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TireOCRProcessor.swift; sourceTree = "<group>"; };
+		A2000009 /* TireTextParser.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TireTextParser.swift; sourceTree = "<group>"; };
+		A200000A /* ScanHistoryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanHistoryView.swift; sourceTree = "<group>"; };
+		A200000B /* ScanResultView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ScanResultView.swift; sourceTree = "<group>"; };
+		A200000C /* StudioPhotoView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StudioPhotoView.swift; sourceTree = "<group>"; };
+		A200000D /* TireScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TireScannerView.swift; sourceTree = "<group>"; };
+		A200000E /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		A200000F /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 /* End PBXFileReference section */
-
-/* Begin PBXFileSystemSynchronizedRootGroup section */
-		035360322F6656C300F178BE /* SmartPneu */ = {
-			isa = PBXFileSystemSynchronizedRootGroup;
-			path = SmartPneu;
-			sourceTree = "<group>";
-		};
-/* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
 		0353602D2F6656C300F178BE /* Frameworks */ = {
@@ -32,7 +56,7 @@
 		035360272F6656C300F178BE = {
 			isa = PBXGroup;
 			children = (
-				035360322F6656C300F178BE /* SmartPneu */,
+				A3000001 /* SmartPneu */,
 				035360312F6656C300F178BE /* Products */,
 			);
 			sourceTree = "<group>";
@@ -43,6 +67,68 @@
 				035360302F6656C300F178BE /* SmartPneu.app */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		A3000001 /* SmartPneu */ = {
+			isa = PBXGroup;
+			children = (
+				A2000002 /* ContentView.swift */,
+				A200000E /* Assets.xcassets */,
+				A200000F /* Info.plist */,
+				A3000002 /* SmartPneu */,
+			);
+			path = SmartPneu;
+			sourceTree = "<group>";
+		};
+		A3000002 /* SmartPneu */ = {
+			isa = PBXGroup;
+			children = (
+				A2000001 /* SmartPneuApp.swift */,
+				A3000003 /* Camera */,
+				A3000004 /* Models */,
+				A3000005 /* Scanner */,
+				A3000006 /* Views */,
+			);
+			path = SmartPneu;
+			sourceTree = "<group>";
+		};
+		A3000003 /* Camera */ = {
+			isa = PBXGroup;
+			children = (
+				A2000003 /* CameraManager.swift */,
+				A2000004 /* CameraPreviewView.swift */,
+				A2000005 /* PhotoCaptureManager.swift */,
+			);
+			path = Camera;
+			sourceTree = "<group>";
+		};
+		A3000004 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				A2000006 /* TireSpec.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		A3000005 /* Scanner */ = {
+			isa = PBXGroup;
+			children = (
+				A2000007 /* BackgroundRemover.swift */,
+				A2000008 /* TireOCRProcessor.swift */,
+				A2000009 /* TireTextParser.swift */,
+			);
+			path = Scanner;
+			sourceTree = "<group>";
+		};
+		A3000006 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				A200000A /* ScanHistoryView.swift */,
+				A200000B /* ScanResultView.swift */,
+				A200000C /* StudioPhotoView.swift */,
+				A200000D /* TireScannerView.swift */,
+			);
+			path = Views;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -60,9 +146,6 @@
 			);
 			dependencies = (
 			);
-			fileSystemSynchronizedGroups = (
-				035360322F6656C300F178BE /* SmartPneu */,
-			);
 			name = SmartPneu;
 			packageProductDependencies = (
 			);
@@ -77,15 +160,16 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2630;
-				LastUpgradeCheck = 2630;
+				LastSwiftUpdateCheck = 1520;
+				LastUpgradeCheck = 1520;
 				TargetAttributes = {
 					0353602F2F6656C300F178BE = {
-						CreatedOnToolsVersion = 26.3;
+						CreatedOnToolsVersion = 15.2;
 					};
 				};
 			};
 			buildConfigurationList = 0353602B2F6656C300F178BE /* Build configuration list for PBXProject "SmartPneu" */;
+			compatibilityVersion = "Xcode 14.0";
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -93,8 +177,6 @@
 				Base,
 			);
 			mainGroup = 035360272F6656C300F178BE;
-			minimizedProjectReferenceProxies = 1;
-			preferredProjectObjectVersion = 77;
 			productRefGroup = 035360312F6656C300F178BE /* Products */;
 			projectDirPath = "";
 			projectRoot = "";
@@ -109,6 +191,7 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A100000E /* Assets.xcassets in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -119,6 +202,19 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A1000001 /* SmartPneuApp.swift in Sources */,
+				A1000002 /* ContentView.swift in Sources */,
+				A1000003 /* CameraManager.swift in Sources */,
+				A1000004 /* CameraPreviewView.swift in Sources */,
+				A1000005 /* PhotoCaptureManager.swift in Sources */,
+				A1000006 /* TireSpec.swift in Sources */,
+				A1000007 /* BackgroundRemover.swift in Sources */,
+				A1000008 /* TireOCRProcessor.swift in Sources */,
+				A1000009 /* TireTextParser.swift in Sources */,
+				A100000A /* ScanHistoryView.swift in Sources */,
+				A100000B /* ScanResultView.swift in Sources */,
+				A100000C /* StudioPhotoView.swift in Sources */,
+				A100000D /* TireScannerView.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -160,7 +256,6 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = dwarf;
-				DEVELOPMENT_TEAM = D72HCP7CHJ;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_TESTABILITY = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -178,7 +273,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
 				MTL_FAST_MATH = YES;
@@ -224,7 +319,6 @@
 				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
 				COPY_PHASE_STRIP = NO;
 				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
-				DEVELOPMENT_TEAM = D72HCP7CHJ;
 				ENABLE_NS_ASSERTIONS = NO;
 				ENABLE_STRICT_OBJC_MSGSEND = YES;
 				ENABLE_USER_SCRIPT_SANDBOXING = YES;
@@ -236,7 +330,7 @@
 				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
 				GCC_WARN_UNUSED_FUNCTION = YES;
 				GCC_WARN_UNUSED_VARIABLE = YES;
-				IPHONEOS_DEPLOYMENT_TARGET = 26.2;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
 				MTL_ENABLE_DEBUG_INFO = NO;
 				MTL_FAST_MATH = YES;
@@ -256,11 +350,14 @@
 				DEVELOPMENT_TEAM = D72HCP7CHJ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SmartPneu/Info.plist;
+				INFOPLIST_KEY_NSCameraUsageDescription = "SmartPneu needs camera access to scan tire sidewalls";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -268,11 +365,7 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.smartpneu.SmartPneu;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
@@ -288,11 +381,14 @@
 				DEVELOPMENT_TEAM = D72HCP7CHJ;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SmartPneu/Info.plist;
+				INFOPLIST_KEY_NSCameraUsageDescription = "SmartPneu needs camera access to scan tire sidewalls";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -300,11 +396,7 @@
 				MARKETING_VERSION = 1.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.smartpneu.SmartPneu;
 				PRODUCT_NAME = "$(TARGET_NAME)";
-				STRING_CATALOG_GENERATE_SYMBOLS = YES;
-				SWIFT_APPROACHABLE_CONCURRENCY = YES;
-				SWIFT_DEFAULT_ACTOR_ISOLATION = MainActor;
 				SWIFT_EMIT_LOC_STRINGS = YES;
-				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
 			};
