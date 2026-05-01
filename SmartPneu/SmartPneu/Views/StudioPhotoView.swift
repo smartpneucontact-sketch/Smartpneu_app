@@ -195,6 +195,84 @@ struct CapturedPhoto: Identifiable {
     var processingError: String? = nil
 }
 
+// MARK: - Framing Guide Overlay
+// Dim mask with a bright window cut out, sized per photo mode so the
+// operator frames tires with visible margin (~70-85% of viewport).
+
+private struct FramingGuideOverlay: View {
+    let photoMode: PhotoMode
+
+    var body: some View {
+        GeometryReader { geo in
+            let (windowSize, isCircle) = windowGeometry(for: photoMode, in: geo.size)
+            ZStack {
+                Color.black.opacity(0.35)
+                    .mask {
+                        Rectangle()
+                            .overlay(alignment: .center) {
+                                if isCircle {
+                                    Circle()
+                                        .frame(width: windowSize.width, height: windowSize.height)
+                                        .blendMode(.destinationOut)
+                                } else {
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .frame(width: windowSize.width, height: windowSize.height)
+                                        .blendMode(.destinationOut)
+                                }
+                            }
+                            .compositingGroup()
+                    }
+
+                Group {
+                    if isCircle {
+                        Circle().stroke(Color.orange, lineWidth: 2)
+                    } else {
+                        RoundedRectangle(cornerRadius: 12).stroke(Color.orange, lineWidth: 2)
+                    }
+                }
+                .frame(width: windowSize.width, height: windowSize.height)
+
+                VStack {
+                    Spacer()
+                    Text(captionText(for: photoMode))
+                        .font(.caption)
+                        .fontWeight(.semibold)
+                        .multilineTextAlignment(.center)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Color.black.opacity(0.5))
+                        .foregroundColor(.white)
+                        .cornerRadius(8)
+                        .padding(.bottom, 12)
+                }
+            }
+            .allowsHitTesting(false)
+        }
+    }
+
+    private func windowGeometry(for mode: PhotoMode, in size: CGSize) -> (CGSize, Bool) {
+        switch mode {
+        case .side:
+            let d = min(size.width, size.height) * 0.70
+            return (CGSize(width: d, height: d), true)
+        case .front:
+            let h = size.height * 0.75
+            return (CGSize(width: h * (3.0 / 4.0), height: h), false)
+        case .front4:
+            let h = size.height * 0.85
+            return (CGSize(width: h * (3.0 / 8.0), height: h), false)
+        }
+    }
+
+    private func captionText(for mode: PhotoMode) -> String {
+        switch mode {
+        case .side:   return "Cadrer le pneu DANS le cercle (marge visible)"
+        case .front:  return "Cadrer les 2 pneus DANS le rectangle (reculer si trop près)"
+        case .front4: return "Cadrer les 4 pneus DANS le rectangle (reculer si trop près)"
+        }
+    }
+}
+
 // MARK: - SKU Entry View
 
 struct SKUEntryView: View {
@@ -422,42 +500,12 @@ struct ShootingView: View {
     // MARK: - Portrait Layout (Côté / Face 2)
 
     private var portraitBody: some View {
-        VStack {
+        VStack(spacing: 0) {
             topBar
-            Spacer()
 
-            // Framing guide
-            if photoMode == .side {
-                ZStack {
-                    Circle()
-                        .stroke(Color.orange.opacity(0.6), lineWidth: 2)
-                        .frame(width: 280, height: 280)
-                    Circle()
-                        .stroke(Color.orange.opacity(0.3), lineWidth: 1)
-                        .frame(width: 120, height: 120)
-                }
-                Text("Cadrez le pneu dans le cercle")
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundColor(.white.opacity(0.8))
-                    .padding(.top, 8)
-            } else {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.orange.opacity(0.6), lineWidth: 2)
-                        .frame(width: 220, height: 340)
-                    Rectangle()
-                        .stroke(Color.orange.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [6, 4]))
-                        .frame(width: 200, height: 1)
-                }
-                Text("Cadrez les 2 pneus dans le rectangle")
-                    .font(.caption)
-                    .fontWeight(.medium)
-                    .foregroundColor(.white.opacity(0.8))
-                    .padding(.top, 8)
-            }
+            FramingGuideOverlay(photoMode: photoMode)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
 
-            Spacer()
             thumbnailStrip
             bottomButtons
         }
@@ -469,28 +517,8 @@ struct ShootingView: View {
         GeometryReader { geo in
             HStack(spacing: 0) {
                 // Left side: framing guide centered over camera (full screen)
-                ZStack {
-                    let guideHeight = geo.size.height * 0.85
-                    let guideWidth = guideHeight * 0.375  // 3:8 ratio
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.orange.opacity(0.6), lineWidth: 2)
-                        .frame(width: guideWidth, height: guideHeight)
-                        .overlay {
-                            VStack(spacing: 0) {
-                                ForEach(0..<4, id: \.self) { i in
-                                    if i > 0 {
-                                        Rectangle()
-                                            .stroke(Color.orange.opacity(0.3), style: StrokeStyle(lineWidth: 1, dash: [6, 4]))
-                                            .frame(width: guideWidth - 20, height: 1)
-                                    }
-                                    Spacer()
-                                        .frame(maxHeight: .infinity)
-                                }
-                            }
-                            .padding(.vertical, 4)
-                        }
-                }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
+                FramingGuideOverlay(photoMode: photoMode)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
 
                 // Right side: compact controls panel
                 VStack(spacing: 8) {
