@@ -28,7 +28,7 @@ struct StudioPhotoView: View {
     @State private var isProcessingAll = false
     @State private var processedCount = 0
     @State private var selectedBackground: BackgroundRemover.BackgroundStyle = .white
-    @State private var selectedEdgeQuality: BackgroundRemover.EdgeQuality = .erodeFeather
+    @State private var selectedEdgeQuality: BackgroundRemover.EdgeQuality = .closeFill
 
     enum StudioStep {
         case skuEntry       // Enter SKU number

@@ -46,7 +46,7 @@ class BackgroundRemover: ObservableObject {
     func removeBackground(
         from image: UIImage,
         backgroundStyle: BackgroundStyle = .white,
-        edgeQuality: EdgeQuality = .erodeFeather,
+        edgeQuality: EdgeQuality = .closeFill,
         photoMode: PhotoMode = .side,
         completion: @escaping (UIImage?, String?, Bool) -> Void
     ) {
