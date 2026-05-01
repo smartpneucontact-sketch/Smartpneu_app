@@ -135,8 +135,9 @@ struct StudioPhotoView: View {
                 backgroundStyle: selectedBackground,
                 edgeQuality: selectedEdgeQuality,
                 photoMode: capturedPhotos[i].mode
-            ) { result in
+            ) { result, errorMessage in
                 capturedPhotos[i].processed = result
+                capturedPhotos[i].processingError = errorMessage
                 processedCount += 1
                 if processedCount == capturedPhotos.count {
                     isProcessingAll = false
@@ -191,6 +192,7 @@ struct CapturedPhoto: Identifiable {
     var processed: UIImage?
     var index: Int
     var mode: PhotoMode = .side
+    var processingError: String? = nil
 }
 
 // MARK: - SKU Entry View
@@ -800,8 +802,9 @@ struct ReviewView: View {
                             .resizable()
                             .scaledToFit()
                             .overlay(
-                                Text("Non traité")
+                                Text(photo.processingError ?? "Non traité")
                                     .font(.caption)
+                                    .multilineTextAlignment(.center)
                                     .padding(6)
                                     .background(Color.black.opacity(0.6))
                                     .foregroundColor(.white)

@@ -48,7 +48,7 @@ class BackgroundRemover: ObservableObject {
         backgroundStyle: BackgroundStyle = .white,
         edgeQuality: EdgeQuality = .erodeFeather,
         photoMode: PhotoMode = .side,
-        completion: @escaping (UIImage?) -> Void
+        completion: @escaping (UIImage?, String?) -> Void
     ) {
         DispatchQueue.main.async { self.isProcessing = true }
 
@@ -59,16 +59,15 @@ class BackgroundRemover: ObservableObject {
             // so CGImage/CIImage don't lose it (fixes 90° rotation from library photos)
             let normalizedImage = self.normalizeOrientation(image)
 
-            // Step 1: Crop based on mode
-            // Side = square (1:1), Front 2 = portrait (3:4), Front 4 = tall portrait (3:8)
+            // Step 1: Pre-crop only for Side mode (single tire, square frame).
+            // For Front modes we segment on the full frame so Vision can see the
+            // outer edges of the tires; centerSubjectInCanvas reframes the result.
             let croppedImage: UIImage
             switch photoMode {
             case .side:
                 croppedImage = self.cropToSquare(normalizedImage)
-            case .front:
-                croppedImage = self.cropToPortrait(normalizedImage, ratio: 3.0 / 4.0)
-            case .front4:
-                croppedImage = self.cropToPortrait(normalizedImage, ratio: 3.0 / 8.0)
+            case .front, .front4:
+                croppedImage = normalizedImage
             }
 
             guard let cgImage = croppedImage.cgImage else {
@@ -627,12 +626,12 @@ class BackgroundRemover: ObservableObject {
         return UIImage(cgImage: cgImage)
     }
 
-    private func finish(with image: UIImage?, error: String?, completion: @escaping (UIImage?) -> Void) {
+    private func finish(with image: UIImage?, error: String?, completion: @escaping (UIImage?, String?) -> Void) {
         DispatchQueue.main.async {
             self.isProcessing = false
             self.processedImage = image
             self.error = error
-            completion(image)
+            completion(image, error)
         }
     }
 
