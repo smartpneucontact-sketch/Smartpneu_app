@@ -48,7 +48,7 @@ class BackgroundRemover: ObservableObject {
         backgroundStyle: BackgroundStyle = .white,
         edgeQuality: EdgeQuality = .erodeFeather,
         photoMode: PhotoMode = .side,
-        completion: @escaping (UIImage?, String?) -> Void
+        completion: @escaping (UIImage?, String?, Bool) -> Void
     ) {
         DispatchQueue.main.async { self.isProcessing = true }
 
@@ -111,6 +111,9 @@ class BackgroundRemover: ObservableObject {
                     from: handler
                 )
 
+                // Detect if the mask reaches any frame border — operator shot too close
+                let edgesCut = self.maskTouchesFrame(maskPixelBuffer)
+
                 let maskCI = CIImage(cvPixelBuffer: maskPixelBuffer)
 
                 // Scale the mask to match the original image dimensions
@@ -159,7 +162,7 @@ class BackgroundRemover: ObservableObject {
                     finalImage = self.compositeOnBackground(subject: subjectCIImage, backgroundColor: color)
                 }
 
-                self.finish(with: finalImage, error: nil, completion: completion)
+                self.finish(with: finalImage, error: nil, edgesCut: edgesCut, completion: completion)
 
             } catch {
                 self.finish(with: nil, error: "Erreur masque: \(error.localizedDescription)", completion: completion)
@@ -402,6 +405,37 @@ class BackgroundRemover: ObservableObject {
         let bboxH = max(1, maxY - minY)
         let aspect = Double(bboxW) / Double(bboxH)
         return (count, aspect)
+    }
+
+    /// Returns true if the mask has non-zero pixels within `marginPx` of any
+    /// of the four frame borders, meaning the segmented subject was cut by
+    /// the camera frame (operator was too close).
+    private func maskTouchesFrame(_ pixelBuffer: CVPixelBuffer, marginPx: Int = 4) -> Bool {
+        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+
+        let width = CVPixelBufferGetWidth(pixelBuffer)
+        let height = CVPixelBufferGetHeight(pixelBuffer)
+        let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
+        guard let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) else { return false }
+        let ptr = baseAddress.assumingMemoryBound(to: UInt8.self)
+
+        let m = min(marginPx, min(width, height))
+        // Top + bottom rows
+        for y in 0..<m {
+            for x in 0..<width where ptr[y * bytesPerRow + x] > 128 { return true }
+        }
+        for y in (height - m)..<height {
+            for x in 0..<width where ptr[y * bytesPerRow + x] > 128 { return true }
+        }
+        // Left + right columns
+        for x in 0..<m {
+            for y in m..<(height - m) where ptr[y * bytesPerRow + x] > 128 { return true }
+        }
+        for x in (width - m)..<width {
+            for y in m..<(height - m) where ptr[y * bytesPerRow + x] > 128 { return true }
+        }
+        return false
     }
 
     /// Counts non-zero pixels in a grayscale mask to estimate the area of an instance
@@ -682,12 +716,12 @@ class BackgroundRemover: ObservableObject {
         return UIImage(cgImage: cgImage)
     }
 
-    private func finish(with image: UIImage?, error: String?, completion: @escaping (UIImage?, String?) -> Void) {
+    private func finish(with image: UIImage?, error: String?, edgesCut: Bool = false, completion: @escaping (UIImage?, String?, Bool) -> Void) {
         DispatchQueue.main.async {
             self.isProcessing = false
             self.processedImage = image
             self.error = error
-            completion(image, error)
+            completion(image, error, edgesCut)
         }
     }
 

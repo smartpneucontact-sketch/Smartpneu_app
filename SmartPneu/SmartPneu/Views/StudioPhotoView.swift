@@ -135,9 +135,10 @@ struct StudioPhotoView: View {
                 backgroundStyle: selectedBackground,
                 edgeQuality: selectedEdgeQuality,
                 photoMode: capturedPhotos[i].mode
-            ) { result, errorMessage in
+            ) { result, errorMessage, edgesCut in
                 capturedPhotos[i].processed = result
                 capturedPhotos[i].processingError = errorMessage
+                capturedPhotos[i].edgesCut = edgesCut
                 processedCount += 1
                 if processedCount == capturedPhotos.count {
                     isProcessingAll = false
@@ -193,6 +194,7 @@ struct CapturedPhoto: Identifiable {
     var index: Int
     var mode: PhotoMode = .side
     var processingError: String? = nil
+    var edgesCut: Bool = false
 }
 
 // MARK: - Framing Guide Overlay
@@ -825,6 +827,19 @@ struct ReviewView: View {
                         Image(uiImage: processed)
                             .resizable()
                             .scaledToFit()
+                            .overlay(alignment: .top) {
+                                if photo.edgesCut {
+                                    Label("Bord coupé — refaire la photo", systemImage: "exclamationmark.triangle.fill")
+                                        .font(.caption)
+                                        .fontWeight(.semibold)
+                                        .padding(.horizontal, 10)
+                                        .padding(.vertical, 5)
+                                        .background(Color.yellow)
+                                        .foregroundColor(.black)
+                                        .cornerRadius(8)
+                                        .padding(.top, 8)
+                                }
+                            }
                     } else {
                         Image(uiImage: photo.original)
                             .resizable()
@@ -899,10 +914,23 @@ struct ReviewView: View {
                             .overlay(
                                 RoundedRectangle(cornerRadius: 8)
                                     .stroke(
-                                        selectedPhotoIndex == index ? Color.orange : Color.clear,
+                                        selectedPhotoIndex == index
+                                            ? Color.orange
+                                            : (photo.edgesCut ? Color.yellow : Color.clear),
                                         lineWidth: 3
                                     )
                             )
+                            .overlay(alignment: .topTrailing) {
+                                if photo.edgesCut {
+                                    Image(systemName: "exclamationmark.triangle.fill")
+                                        .font(.caption2)
+                                        .foregroundColor(.black)
+                                        .padding(2)
+                                        .background(Color.yellow)
+                                        .clipShape(Circle())
+                                        .offset(x: 4, y: -4)
+                                }
+                            }
                         }
                     }
                 }
@@ -938,8 +966,12 @@ struct ReviewView: View {
 
             // Action buttons
             VStack(spacing: 10) {
-                // Process button (if not yet processed)
                 let hasUnprocessed = capturedPhotos.contains(where: { $0.processed == nil })
+                let allProcessed = !hasUnprocessed
+                let edgesCutCount = capturedPhotos.filter { $0.edgesCut }.count
+                let canSave = allProcessed && edgesCutCount == 0
+
+                // Process button (if not yet processed)
                 if hasUnprocessed {
                     Button(action: onProcessAll) {
                         HStack {
@@ -972,7 +1004,6 @@ struct ReviewView: View {
                     }
 
                     // Save all
-                    let allProcessed = !capturedPhotos.contains(where: { $0.processed == nil })
                     Button(action: {
                         onSaveAll()
                         allSaved = true
@@ -985,10 +1016,23 @@ struct ReviewView: View {
                         .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(allSaved ? Color.green : (allProcessed ? Color.blue : Color.gray.opacity(0.4)))
+                        .background(allSaved ? Color.green : (canSave ? Color.blue : Color.gray.opacity(0.4)))
                         .cornerRadius(12)
                     }
-                    .disabled(!allProcessed)
+                    .disabled(!canSave)
+                }
+
+                // Edge-cut warning
+                if edgesCutCount > 0 {
+                    Label(
+                        "\(edgesCutCount) photo\(edgesCutCount > 1 ? "s" : "") à refaire — bord coupé. Reculer et reprendre.",
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .font(.caption)
+                    .fontWeight(.medium)
+                    .foregroundColor(.orange)
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 8)
                 }
 
                 // New SKU
