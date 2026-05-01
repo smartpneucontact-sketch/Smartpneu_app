@@ -269,8 +269,12 @@ class BackgroundRemover: ObservableObject {
             return allInstances
         }
 
-        // Measure each instance's area
+        // Measure each instance's area and aspect ratio. Tires viewed front-on are
+        // roughly circular (aspect ~1.0), with reasonable variation. Cloths, tables,
+        // and floors are typically very wide-flat or very tall-thin — reject those.
         var instanceAreas: [(instance: Int, area: Int)] = []
+        let tireAspectMin = 0.45  // narrower than this = thin/strip-shaped (likely cloth fold)
+        let tireAspectMax = 1.8   // wider than this = wide/flat (likely table/cloth)
 
         for instance in allInstances {
             let singleSet = IndexSet(integer: instance)
@@ -278,8 +282,24 @@ class BackgroundRemover: ObservableObject {
                 forInstances: singleSet,
                 from: handler
             )
-            let area = countMaskPixels(maskBuffer)
+            let (area, aspect) = measureInstance(maskBuffer)
+            if aspect < tireAspectMin || aspect > tireAspectMax {
+                // Non-tire shape — skip
+                continue
+            }
             instanceAreas.append((instance, area))
+        }
+
+        // If aspect filtering rejected everything, fall back to area-only on the original list
+        if instanceAreas.isEmpty {
+            for instance in allInstances {
+                let singleSet = IndexSet(integer: instance)
+                let maskBuffer = try result.generateScaledMaskForImage(
+                    forInstances: singleSet,
+                    from: handler
+                )
+                instanceAreas.append((instance, countMaskPixels(maskBuffer)))
+            }
         }
 
         // Sort by area descending
@@ -346,6 +366,42 @@ class BackgroundRemover: ObservableObject {
 
         let kept = IndexSet(cluster.map(\.instance))
         return kept.isEmpty ? allInstances : kept
+    }
+
+    /// Measures a single-instance mask: returns pixel area and the bounding box
+    /// of non-zero pixels (for aspect-ratio filtering of tire-shaped vs flat objects).
+    private func measureInstance(_ pixelBuffer: CVPixelBuffer) -> (area: Int, aspectRatio: Double) {
+        CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+        defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+
+        let width = CVPixelBufferGetWidth(pixelBuffer)
+        let height = CVPixelBufferGetHeight(pixelBuffer)
+        let bytesPerRow = CVPixelBufferGetBytesPerRow(pixelBuffer)
+
+        guard let baseAddress = CVPixelBufferGetBaseAddress(pixelBuffer) else { return (0, 1.0) }
+        let ptr = baseAddress.assumingMemoryBound(to: UInt8.self)
+
+        var count = 0
+        var minX = width, minY = height, maxX = 0, maxY = 0
+        let step = 4
+
+        for y in stride(from: 0, to: height, by: step) {
+            for x in stride(from: 0, to: width, by: step) {
+                let offset = y * bytesPerRow + x
+                if ptr[offset] > 128 {
+                    count += 1
+                    if x < minX { minX = x }
+                    if y < minY { minY = y }
+                    if x > maxX { maxX = x }
+                    if y > maxY { maxY = y }
+                }
+            }
+        }
+
+        let bboxW = max(1, maxX - minX)
+        let bboxH = max(1, maxY - minY)
+        let aspect = Double(bboxW) / Double(bboxH)
+        return (count, aspect)
     }
 
     /// Counts non-zero pixels in a grayscale mask to estimate the area of an instance
