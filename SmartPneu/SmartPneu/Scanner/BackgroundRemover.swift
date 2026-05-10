@@ -78,26 +78,86 @@ class BackgroundRemover: ObservableObject {
             let originalCI = CIImage(cgImage: cgImage)
             let imageSize = originalCI.extent
 
-            // Step 2: Luminance-based segmentation
-            // Tires are dark; backgrounds (white walls, floors, cloths) are light.
-            // Threshold by luminance, fill tread voids by morphological close, then
-            // keep only tire-shaped connected components.
+            // Step 2: Run foreground instance mask — detects separate foreground objects
+            let request = VNGenerateForegroundInstanceMaskRequest()
+            let handler = VNImageRequestHandler(cgImage: cgImage, options: [:])
+
             do {
-                guard let tireMaskCG = try self.tireMaskByLuminance(
-                    cgImage: cgImage,
-                    photoMode: photoMode
-                ) else {
-                    self.finish(with: nil, error: "Aucun sujet détecté", completion: completion)
-                    return
+                try handler.perform([request])
+            } catch {
+                self.finish(with: nil, error: "Erreur Vision: \(error.localizedDescription)", completion: completion)
+                return
+            }
+
+            guard let result = request.results?.first else {
+                self.finish(with: nil, error: "Aucun sujet détecté", completion: completion)
+                return
+            }
+
+            do {
+                // Step 2b: Select instances based on photo mode
+                // Side view: largest instance only (tire, ignore stand)
+                // Front view: all large instances (multiple tires), ignore small debris
+                let tireInstances: IndexSet
+                if photoMode == .side {
+                    tireInstances = try self.findLargestInstance(result: result, handler: handler)
+                } else {
+                    tireInstances = try self.findLargeInstances(result: result, handler: handler)
                 }
 
-                // Detect if the mask reaches any frame border — operator shot too close
-                let edgesCut = self.maskTouchesFrame(cgImage: tireMaskCG)
+                // Edge-cut detection runs on the combined mask (any instance
+                // touching the frame should warn the operator)
+                let combinedBuffer = try result.generateScaledMaskForImage(
+                    forInstances: tireInstances,
+                    from: handler
+                )
+                let edgesCut = self.maskTouchesFrame(combinedBuffer)
 
-                let scaledMask = CIImage(cgImage: tireMaskCG)
+                // Helper: Lanczos-scale a mask buffer to image dimensions
+                func scaleMask(_ buffer: CVPixelBuffer) -> CIImage {
+                    let maskCI = CIImage(cvPixelBuffer: buffer)
+                    let sx = imageSize.width / maskCI.extent.width
+                    let sy = imageSize.height / maskCI.extent.height
+                    let needsScale = abs(sx - 1.0) > 0.001 || abs(sy - 1.0) > 0.001
+                    guard needsScale, let lanczos = CIFilter(name: "CILanczosScaleTransform") else {
+                        return maskCI.transformed(by: CGAffineTransform(scaleX: sx, y: sy))
+                    }
+                    lanczos.setValue(maskCI, forKey: kCIInputImageKey)
+                    lanczos.setValue(sy, forKey: kCIInputScaleKey)
+                    lanczos.setValue(sx / sy, forKey: kCIInputAspectRatioKey)
+                    return lanczos.outputImage?.cropped(to: CGRect(origin: .zero, size: imageSize.size))
+                        ?? maskCI.transformed(by: CGAffineTransform(scaleX: sx, y: sy))
+                }
 
-                // Refine mask edges based on chosen quality method
-                let softMask = self.refineMask(scaledMask, method: edgeQuality, extent: imageSize)
+                // Build the soft mask. For multi-instance front modes, refine
+                // each tire's mask independently and then union the results.
+                // This prevents pre-blur smoothing in one tire's mask from
+                // bridging into another tire's region (which created the
+                // gray strip in the gap between adjacent tires).
+                let softMask: CIImage
+                if tireInstances.count <= 1 {
+                    let scaled = scaleMask(combinedBuffer)
+                    softMask = self.refineMask(scaled, method: edgeQuality, extent: imageSize)
+                } else {
+                    var unionMask: CIImage? = nil
+                    for instance in tireInstances {
+                        let singleBuffer = try result.generateScaledMaskForImage(
+                            forInstances: IndexSet(integer: instance),
+                            from: handler
+                        )
+                        let scaled = scaleMask(singleBuffer)
+                        let refined = self.refineMask(scaled, method: edgeQuality, extent: imageSize)
+                        if let prev = unionMask, let maxFilter = CIFilter(name: "CIMaximumCompositing") {
+                            maxFilter.setValue(refined, forKey: kCIInputImageKey)
+                            maxFilter.setValue(prev, forKey: kCIInputBackgroundImageKey)
+                            unionMask = (maxFilter.outputImage ?? refined).cropped(to: imageSize)
+                        } else {
+                            unionMask = refined
+                        }
+                    }
+                    softMask = unionMask ?? CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 0))
+                        .cropped(to: imageSize)
+                }
 
                 // Apply the mask: blend original over transparent background
                 let blendFilter = CIFilter(name: "CIBlendWithMask")!
@@ -194,270 +254,6 @@ class BackgroundRemover: ObservableObject {
 
         guard let cropped = cgImage.cropping(to: cropRect) else { return image }
         return UIImage(cgImage: cropped, scale: image.scale, orientation: image.imageOrientation)
-    }
-
-    // MARK: - Step 2: Luminance-based tire mask
-
-    private static let luminanceThreshold: UInt8 = 80   // pixels darker than this are "tire"
-    private static let minComponentAreaFraction: Double = 0.02  // 2% of frame
-    private static let maxComponentAreaFraction: Double = 0.85
-    private static let tireAspectMinRatio: Double = 0.45
-    private static let tireAspectMaxRatio: Double = 1.8
-
-    /// Top-level pipeline: input image → grayscale binary mask of dark pixels →
-    /// morphological close → keep only tire-shaped connected components → render
-    /// final filled mask CGImage at the input image's resolution.
-    private func tireMaskByLuminance(cgImage: CGImage, photoMode: PhotoMode) throws -> CGImage? {
-        let width = cgImage.width
-        let height = cgImage.height
-
-        // 1. Threshold: dark pixels → 255 (tire), light pixels → 0 (background)
-        guard let thresholded = self.luminanceThresholdBuffer(cgImage: cgImage) else { return nil }
-
-        // 2. Morphological close to fill small holes (tread voids, gaps between tires)
-        let dilated = self.morphMax(buffer: thresholded, width: width, height: height, radius: 5)
-        let closed = self.morphMin(buffer: dilated, width: width, height: height, radius: 5)
-
-        // 3. Connected component labeling — find all blobs, their labels and bounding boxes
-        let cc = self.connectedComponents(bytes: closed, width: width, height: height)
-
-        // 4. Filter components by area + aspect ratio
-        let totalPixels = Double(width * height)
-        let minArea = totalPixels * BackgroundRemover.minComponentAreaFraction
-        let maxArea = totalPixels * BackgroundRemover.maxComponentAreaFraction
-        let validTires = cc.components.filter { c in
-            let area = Double(c.area)
-            guard area >= minArea && area <= maxArea else { return false }
-            let aspect = Double(c.bbox.width) / max(Double(c.bbox.height), 1.0)
-            return aspect >= BackgroundRemover.tireAspectMinRatio
-                && aspect <= BackgroundRemover.tireAspectMaxRatio
-        }
-
-        guard !validTires.isEmpty else { return nil }
-
-        // 5. Sort by area descending; keep top N (1 for side, up to 4 for front)
-        let sorted = validTires.sorted { $0.area > $1.area }
-        let keepCount = (photoMode == .side) ? 1 : min(4, sorted.count)
-        let keptLabels = Set(sorted.prefix(keepCount).map { $0.label })
-
-        // 6. Render kept components into a clean binary mask
-        var outBytes = [UInt8](repeating: 0, count: width * height)
-        for i in 0..<(width * height) where keptLabels.contains(cc.labels[i]) {
-            outBytes[i] = 255
-        }
-        return self.makeGrayscaleCGImage(bytes: outBytes, width: width, height: height)
-    }
-
-    /// Reads cgImage into RGBA, computes per-pixel luminance, returns a flat 8bpp array
-    /// where each byte is 255 (tire = dark) or 0 (background = light).
-    private func luminanceThresholdBuffer(cgImage: CGImage) -> [UInt8]? {
-        let width = cgImage.width
-        let height = cgImage.height
-        let bytesPerPixel = 4
-        let bytesPerRow = width * bytesPerPixel
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
-
-        var rgba = [UInt8](repeating: 0, count: width * height * bytesPerPixel)
-        guard let context = rgba.withUnsafeMutableBytes({ ptr -> CGContext? in
-            CGContext(
-                data: ptr.baseAddress,
-                width: width,
-                height: height,
-                bitsPerComponent: 8,
-                bytesPerRow: bytesPerRow,
-                space: colorSpace,
-                bitmapInfo: bitmapInfo
-            )
-        }) else { return nil }
-        context.draw(cgImage, in: CGRect(x: 0, y: 0, width: width, height: height))
-
-        var mask = [UInt8](repeating: 0, count: width * height)
-        let threshold = UInt32(BackgroundRemover.luminanceThreshold)
-        for i in 0..<(width * height) {
-            let r = UInt32(rgba[i * 4 + 0])
-            let g = UInt32(rgba[i * 4 + 1])
-            let b = UInt32(rgba[i * 4 + 2])
-            // Rec. 601 luminance approximation, integer math
-            let lum = (r * 299 + g * 587 + b * 114) / 1000
-            if lum < threshold { mask[i] = 255 }
-        }
-        return mask
-    }
-
-    /// Box dilation (max filter) of a binary 0/255 buffer.
-    private func morphMax(buffer: [UInt8], width: Int, height: Int, radius: Int) -> [UInt8] {
-        var horiz = [UInt8](repeating: 0, count: width * height)
-        for y in 0..<height {
-            for x in 0..<width {
-                var v: UInt8 = 0
-                let xMin = max(0, x - radius), xMax = min(width - 1, x + radius)
-                for nx in xMin...xMax {
-                    let p = buffer[y * width + nx]
-                    if p > v { v = p }
-                    if v == 255 { break }
-                }
-                horiz[y * width + x] = v
-            }
-        }
-        var out = [UInt8](repeating: 0, count: width * height)
-        for x in 0..<width {
-            for y in 0..<height {
-                var v: UInt8 = 0
-                let yMin = max(0, y - radius), yMax = min(height - 1, y + radius)
-                for ny in yMin...yMax {
-                    let p = horiz[ny * width + x]
-                    if p > v { v = p }
-                    if v == 255 { break }
-                }
-                out[y * width + x] = v
-            }
-        }
-        return out
-    }
-
-    /// Box erosion (min filter) of a binary 0/255 buffer.
-    private func morphMin(buffer: [UInt8], width: Int, height: Int, radius: Int) -> [UInt8] {
-        var horiz = [UInt8](repeating: 255, count: width * height)
-        for y in 0..<height {
-            for x in 0..<width {
-                var v: UInt8 = 255
-                let xMin = max(0, x - radius), xMax = min(width - 1, x + radius)
-                for nx in xMin...xMax {
-                    let p = buffer[y * width + nx]
-                    if p < v { v = p }
-                    if v == 0 { break }
-                }
-                horiz[y * width + x] = v
-            }
-        }
-        var out = [UInt8](repeating: 255, count: width * height)
-        for x in 0..<width {
-            for y in 0..<height {
-                var v: UInt8 = 255
-                let yMin = max(0, y - radius), yMax = min(height - 1, y + radius)
-                for ny in yMin...yMax {
-                    let p = horiz[ny * width + x]
-                    if p < v { v = p }
-                    if v == 0 { break }
-                }
-                out[y * width + x] = v
-            }
-        }
-        return out
-    }
-
-    private struct Component {
-        let label: Int32
-        var area: Int
-        var bbox: CGRect
-    }
-
-    private struct ConnectedComponentsResult {
-        let labels: [Int32]
-        let components: [Component]
-    }
-
-    /// Two-pass connected-component labeling (4-connectivity) of a binary 0/255 buffer.
-    /// Returns the per-pixel canonical labels and a list of (label, area, bbox) records.
-    private func connectedComponents(bytes: [UInt8], width: Int, height: Int) -> ConnectedComponentsResult {
-        var labels = [Int32](repeating: 0, count: width * height)
-        var parent: [Int32] = [0]   // union-find; label 0 reserved for "background"
-        var nextLabel: Int32 = 1
-
-        func find(_ x: Int32) -> Int32 {
-            var i = x
-            while parent[Int(i)] != i { i = parent[Int(i)] }
-            // Path compression
-            var j = x
-            while parent[Int(j)] != i {
-                let nextP = parent[Int(j)]
-                parent[Int(j)] = i
-                j = nextP
-            }
-            return i
-        }
-        func union(_ a: Int32, _ b: Int32) {
-            let ra = find(a), rb = find(b)
-            if ra != rb { parent[Int(max(ra, rb))] = min(ra, rb) }
-        }
-
-        // Pass 1: assign provisional labels
-        for y in 0..<height {
-            for x in 0..<width {
-                let idx = y * width + x
-                if bytes[idx] == 0 { continue }
-                let leftLabel: Int32 = (x > 0) ? labels[idx - 1] : 0
-                let topLabel: Int32 = (y > 0) ? labels[idx - width] : 0
-                if leftLabel == 0 && topLabel == 0 {
-                    parent.append(nextLabel)
-                    labels[idx] = nextLabel
-                    nextLabel += 1
-                } else if leftLabel != 0 && topLabel != 0 {
-                    let m = min(leftLabel, topLabel)
-                    labels[idx] = m
-                    if leftLabel != topLabel { union(leftLabel, topLabel) }
-                } else {
-                    labels[idx] = max(leftLabel, topLabel)
-                }
-            }
-        }
-
-        // Pass 2: resolve to canonical labels and accumulate stats
-        var area = [Int32: Int]()
-        var minX = [Int32: Int]()
-        var minY = [Int32: Int]()
-        var maxX = [Int32: Int]()
-        var maxY = [Int32: Int]()
-        for y in 0..<height {
-            for x in 0..<width {
-                let idx = y * width + x
-                let l = labels[idx]
-                if l == 0 { continue }
-                let canonical = find(l)
-                labels[idx] = canonical
-                area[canonical, default: 0] += 1
-                minX[canonical] = min(minX[canonical] ?? Int.max, x)
-                minY[canonical] = min(minY[canonical] ?? Int.max, y)
-                maxX[canonical] = max(maxX[canonical] ?? 0, x)
-                maxY[canonical] = max(maxY[canonical] ?? 0, y)
-            }
-        }
-
-        var components: [Component] = []
-        components.reserveCapacity(area.count)
-        for (label, a) in area {
-            let x0 = minX[label]!
-            let y0 = minY[label]!
-            let w = (maxX[label]! - x0) + 1
-            let h = (maxY[label]! - y0) + 1
-            components.append(Component(
-                label: label,
-                area: a,
-                bbox: CGRect(x: x0, y: y0, width: w, height: h)
-            ))
-        }
-        return ConnectedComponentsResult(labels: labels, components: components)
-    }
-
-    /// Builds an 8bpp grayscale CGImage from a flat byte buffer (row-major, top-left origin).
-    private func makeGrayscaleCGImage(bytes: [UInt8], width: Int, height: Int) -> CGImage? {
-        let colorSpace = CGColorSpaceCreateDeviceGray()
-        let bitmapInfo = CGImageAlphaInfo.none.rawValue
-        guard let provider = CGDataProvider(data: NSData(bytes: bytes, length: bytes.count)) else { return nil }
-        return CGImage(
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bitsPerPixel: 8,
-            bytesPerRow: width,
-            space: colorSpace,
-            bitmapInfo: CGBitmapInfo(rawValue: bitmapInfo),
-            provider: provider,
-            decode: nil,
-            shouldInterpolate: false,
-            intent: .defaultIntent
-        )
     }
 
     // MARK: - Step 2b: Find Largest Instance (the Tire)
@@ -646,35 +442,6 @@ class BackgroundRemover: ObservableObject {
         return (count, aspect)
     }
 
-    /// CGImage variant — used by the luminance pipeline. Reads the grayscale 8bpp data
-    /// and reports if any non-zero pixel sits within `marginPx` of the borders.
-    private func maskTouchesFrame(cgImage: CGImage, marginPx: Int = 4) -> Bool {
-        guard let data = cgImage.dataProvider?.data,
-              let ptr = CFDataGetBytePtr(data) else { return false }
-        let width = cgImage.width
-        let height = cgImage.height
-        let bytesPerRow = cgImage.bytesPerRow
-        let bytesPerPixel = max(1, cgImage.bitsPerPixel / 8)
-        let m = min(marginPx, min(width, height))
-
-        @inline(__always) func on(_ x: Int, _ y: Int) -> Bool {
-            ptr[y * bytesPerRow + x * bytesPerPixel] > 128
-        }
-        for y in 0..<m {
-            for x in 0..<width where on(x, y) { return true }
-        }
-        for y in (height - m)..<height {
-            for x in 0..<width where on(x, y) { return true }
-        }
-        for x in 0..<m {
-            for y in m..<(height - m) where on(x, y) { return true }
-        }
-        for x in (width - m)..<width {
-            for y in m..<(height - m) where on(x, y) { return true }
-        }
-        return false
-    }
-
     /// Returns true if the mask has non-zero pixels within `marginPx` of any
     /// of the four frame borders, meaning the segmented subject was cut by
     /// the camera frame (operator was too close).
@@ -803,9 +570,34 @@ class BackgroundRemover: ObservableObject {
             return refined
 
         case .closeFill:
-            // 1) Morphological close: dilate then erode — fills small gaps in tread grooves
             var refined = mask
-            // Dilate (expand white = grow mask)
+            // 1) Pre-blur open (radius 8) — removes thin spikes from raw mask
+            //    before blur expansion reinforces them.
+            if let openErode = CIFilter(name: "CIMorphologyMinimum") {
+                openErode.setValue(refined, forKey: kCIInputImageKey)
+                openErode.setValue(8.0, forKey: kCIInputRadiusKey)
+                if let output = openErode.outputImage {
+                    refined = output.cropped(to: extent)
+                }
+            }
+            if let openDilate = CIFilter(name: "CIMorphologyMaximum") {
+                openDilate.setValue(refined, forKey: kCIInputImageKey)
+                openDilate.setValue(8.0, forKey: kCIInputRadiusKey)
+                if let output = openDilate.outputImage {
+                    refined = output.cropped(to: extent)
+                }
+            }
+            // 2) Pre-smooth: heavy blur to melt upscale staircase into a
+            //    continuous gradient. Safe with per-instance refinement —
+            //    each tire's blur stays within its own mask region.
+            if let preBlur = CIFilter(name: "CIGaussianBlur") {
+                preBlur.setValue(refined, forKey: kCIInputImageKey)
+                preBlur.setValue(30.0, forKey: kCIInputRadiusKey)
+                if let output = preBlur.outputImage {
+                    refined = output.cropped(to: extent)
+                }
+            }
+            // 3) Morphological close: dilate then erode — fills small gaps in tread grooves
             if let dilate = CIFilter(name: "CIMorphologyMaximum") {
                 dilate.setValue(refined, forKey: kCIInputImageKey)
                 dilate.setValue(3.0, forKey: kCIInputRadiusKey)
@@ -821,12 +613,21 @@ class BackgroundRemover: ObservableObject {
                     refined = output.cropped(to: extent)
                 }
             }
-            // 2) Sharpen for clean edges
-            refined = sharpenMask(refined, contrast: 3.0, brightness: -0.04, extent: extent)
-            // 3) Feather for smooth transition
+            // 4) Mid-smooth: cleans morphology step artifacts on the gradient
+            if let midBlur = CIFilter(name: "CIGaussianBlur") {
+                midBlur.setValue(refined, forKey: kCIInputImageKey)
+                midBlur.setValue(6.0, forKey: kCIInputRadiusKey)
+                if let output = midBlur.outputImage {
+                    refined = output.cropped(to: extent)
+                }
+            }
+            // 5) Two-pass sharpen — compresses gradient into crisp boundary
+            refined = sharpenMask(refined, contrast: 4.0, brightness: -0.04, extent: extent)
+            refined = sharpenMask(refined, contrast: 4.0, brightness: -0.04, extent: extent)
+            // 6) Sub-pixel feather — minimal AA, just enough to avoid jaggies
             if let blur = CIFilter(name: "CIGaussianBlur") {
                 blur.setValue(refined, forKey: kCIInputImageKey)
-                blur.setValue(2.0, forKey: kCIInputRadiusKey)
+                blur.setValue(0.4, forKey: kCIInputRadiusKey)
                 if let output = blur.outputImage {
                     refined = output.cropped(to: extent)
                 }
@@ -853,8 +654,8 @@ class BackgroundRemover: ObservableObject {
             return image
         }
 
-        // 6% padding on each side → subject fills 88% of canvas
-        let padding: CGFloat = 0.06
+        // 7% padding on each side → subject fills 86% of canvas
+        let padding: CGFloat = 0.07
         let availableWidth = canvasWidth * (1.0 - padding * 2)
         let availableHeight = canvasHeight * (1.0 - padding * 2)
 
@@ -886,8 +687,13 @@ class BackgroundRemover: ObservableObject {
 
         let centered = scaled.transformed(by: CGAffineTransform(translationX: offsetX, y: offsetY))
 
-        // Force-crop to exact canvas dimensions
-        return centered.cropped(to: CGRect(x: 0, y: 0, width: canvasWidth, height: canvasHeight))
+        // Composite over a transparent canvas-sized image to force the extent
+        // to (0, 0, canvasWidth, canvasHeight). cropped(to:) only intersects —
+        // it does not extend — so it can't add the margin pixels by itself.
+        let canvasRect = CGRect(x: 0, y: 0, width: canvasWidth, height: canvasHeight)
+        let transparentCanvas = CIImage(color: CIColor(red: 0, green: 0, blue: 0, alpha: 0))
+            .cropped(to: canvasRect)
+        return centered.composited(over: transparentCanvas)
     }
 
     /// Scans pixel data to find the bounding box of non-transparent pixels

@@ -32,7 +32,6 @@ struct StudioPhotoView: View {
 
     enum StudioStep {
         case skuEntry       // Enter SKU number
-        case sourceChoice   // Pick: take with camera, or import from photo library
         case shooting       // Camera live, taking photos
         case reviewing      // Review all photos, process backgrounds
     }
@@ -46,26 +45,6 @@ struct StudioPhotoView: View {
                         skuText: $skuText,
                         skuError: $skuError,
                         onConfirm: confirmSKU
-                    )
-
-                case .sourceChoice:
-                    SourceChoiceView(
-                        photoMode: $currentPhotoMode,
-                        onCamera: {
-                            currentStep = .shooting
-                            photoManager.startCamera()
-                        },
-                        onGalleryImported: { images in
-                            for image in images {
-                                let photo = CapturedPhoto(
-                                    original: image,
-                                    index: capturedPhotos.count + 1,
-                                    mode: currentPhotoMode
-                                )
-                                capturedPhotos.append(photo)
-                            }
-                            currentStep = .reviewing
-                        }
                     )
 
                 case .shooting:
@@ -120,7 +99,8 @@ struct StudioPhotoView: View {
         capturedPhotos = []
         selectedPhotoIndex = nil
         processedCount = 0
-        currentStep = .sourceChoice
+        currentStep = .shooting
+        photoManager.startCamera()
     }
 
     private func capturePhoto() {
@@ -362,128 +342,6 @@ struct SKUEntryView: View {
             .disabled(skuText.isEmpty)
 
             Spacer()
-        }
-    }
-}
-
-// MARK: - Source Choice View
-// After SKU entry, pick photo source: take new photos with camera, or import existing from library.
-
-struct SourceChoiceView: View {
-    @Binding var photoMode: PhotoMode
-    let onCamera: () -> Void
-    let onGalleryImported: ([UIImage]) -> Void
-
-    @State private var selectedItems: [PhotosPickerItem] = []
-    @State private var isLoading = false
-
-    var body: some View {
-        VStack(spacing: 24) {
-            Spacer()
-
-            // Mode picker
-            VStack(spacing: 10) {
-                Text("Mode photo")
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                HStack(spacing: 8) {
-                    ForEach(PhotoMode.allCases, id: \.self) { mode in
-                        Button(action: { photoMode = mode }) {
-                            Text(mode.rawValue)
-                                .font(.subheadline)
-                                .fontWeight(.bold)
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 10)
-                                .background(photoMode == mode ? Color.orange : Color(.systemGray5))
-                                .foregroundColor(photoMode == mode ? .white : .primary)
-                                .cornerRadius(8)
-                        }
-                    }
-                }
-            }
-
-            Spacer()
-
-            Text("Source des photos")
-                .font(.headline)
-                .foregroundColor(.secondary)
-
-            HStack(spacing: 16) {
-                Button(action: onCamera) {
-                    VStack(spacing: 14) {
-                        Image(systemName: "camera.fill")
-                            .font(.system(size: 48))
-                        Text("Caméra")
-                            .font(.headline)
-                            .fontWeight(.bold)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 32)
-                    .background(Color.orange)
-                    .foregroundColor(.white)
-                    .cornerRadius(16)
-                }
-
-                PhotosPicker(
-                    selection: $selectedItems,
-                    maxSelectionCount: 20,
-                    matching: .images
-                ) {
-                    VStack(spacing: 14) {
-                        Image(systemName: "photo.stack.fill")
-                            .font(.system(size: 48))
-                        Text("Galerie")
-                            .font(.headline)
-                            .fontWeight(.bold)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 32)
-                    .background(Color.blue)
-                    .foregroundColor(.white)
-                    .cornerRadius(16)
-                }
-                .disabled(isLoading)
-            }
-            .padding(.horizontal, 24)
-
-            Spacer()
-        }
-        .overlay {
-            if isLoading {
-                ZStack {
-                    Color.black.opacity(0.5)
-                    VStack(spacing: 12) {
-                        ProgressView()
-                            .tint(.orange)
-                        Text("Importation…")
-                            .font(.subheadline)
-                    }
-                    .padding(20)
-                    .background(Color(.systemBackground))
-                    .cornerRadius(12)
-                }
-                .ignoresSafeArea()
-            }
-        }
-        .onChange(of: selectedItems) { _, newItems in
-            guard !newItems.isEmpty else { return }
-            isLoading = true
-            Task {
-                var images: [UIImage] = []
-                for item in newItems {
-                    if let data = try? await item.loadTransferable(type: Data.self),
-                       let image = UIImage(data: data) {
-                        images.append(image)
-                    }
-                }
-                await MainActor.run {
-                    selectedItems = []
-                    isLoading = false
-                    if !images.isEmpty {
-                        onGalleryImported(images)
-                    }
-                }
-            }
         }
     }
 }
